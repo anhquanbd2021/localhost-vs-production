@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blast Radius Lab</title>
+<style>
+  :root { --bg:#0d1117; --card:#161b22; --ink:#e6edf3; --mut:#8b949e; --acc:#58a6ff; --ok:#3fb950; --bad:#f85149; }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 system-ui,sans-serif; }
+  main { max-width:1000px; margin:0 auto; padding:24px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--mut); margin-bottom:20px; }
+  .wrap { display:grid; grid-template-columns:300px 1fr; gap:16px; }
+  @media (max-width:820px){ .wrap { grid-template-columns:1fr } }
+  .panel { background:var(--card); border:1px solid #30363d; border-radius:10px; padding:14px; }
+  .panel h3 { margin:0 0 10px; font-size:13px; color:var(--mut); text-transform:uppercase; letter-spacing:.05em; }
+  .layer { display:flex; align-items:center; gap:8px; padding:4px 0; font-size:13.5px; }
+  .layer input { accent-color:var(--acc); }
+  .layer small { color:var(--mut); }
+  .scen { padding:9px 10px; border:1px solid #30363d; border-radius:8px; margin-bottom:8px; cursor:pointer; font-size:13.5px; }
+  .scen:hover { border-color:var(--acc); }
+  .scen.sel { border-color:var(--acc); box-shadow:0 0 0 1px var(--acc); }
+  .scen small { display:block; color:var(--mut); margin-top:2px; }
+  .chain { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0; }
+  .hop { border:1px solid #30363d; border-radius:999px; padding:4px 12px; font-size:12.5px; }
+  .hop.on { border-color:var(--ok); color:var(--ok); }
+  .hop.off { border-color:var(--bad); color:var(--bad); text-decoration:line-through; opacity:.6; }
+  .hop.catch { background:var(--ok); color:#0d1117; font-weight:700; }
+  .arrow { color:var(--mut); align-self:center; }
+  .outcome { margin-top:10px; padding:12px; border-radius:8px; font-size:14px; }
+  .outcome.ok { background:#12261e; border:1px solid var(--ok); }
+  .outcome.bad { background:#2d1517; border:1px solid var(--bad); }
+  .lh { color:var(--mut); font-size:13px; margin-top:8px; font-style:italic; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Blast Radius Lab</h1>
+  <p class="sub">Thirteen production layers, nine failure scenarios. Turn a layer off, fire the scenario, watch where the blast lands. On localhost none of this exists.</p>
+  <div class="wrap">
+    <div class="panel"><h3>Production stack</h3><div id="layers"></div></div>
+    <div>
+      <div class="panel"><h3>Fire a scenario</h3><div id="scens"></div></div>
+      <div class="panel" id="result" hidden style="margin-top:16px"><h3>request path</h3><div class="chain" id="chain"></div><div class="outcome" id="outcome"></div><div class="lh" id="lh"></div></div>
+    </div>
+  </div>
+</main>
+<script type="module">
+  const layers = await (await fetch('/api/layers')).json();
+  const scens = await (await fetch('/api/scenarios')).json();
+  const layersEl = document.getElementById('layers');
+  const scensEl = document.getElementById('scens');
+  const state = { enabled: new Set(layers.map(l => l.id)), scenario: null };
+
+  for (const l of layers) {
+    const row = document.createElement('label');
+    row.className = 'layer';
+    row.innerHTML = `<input type="checkbox" checked><span>${l.name} <small>— ${l.gist}</small></span>`;
+    row.querySelector('input').onchange = (e) => {
+      e.target.checked ? state.enabled.add(l.id) : state.enabled.delete(l.id);
+      if (state.scenario) fire();
+    };
+    layersEl.appendChild(row);
+  }
+
+  const cards = scens.map(s => {
+    const d = document.createElement('div');
+    d.className = 'scen';
+    d.innerHTML = `${s.name}<small>localhost: ${s.localhost}</small>`;
+    d.onclick = () => { state.scenario = s.id; cards.forEach(c => c.classList.toggle('sel', c === d)); fire(); };
+    scensEl.appendChild(d);
+    return d;
+  });
+
+  async function fire() {
+    const q = [...state.enabled].join(',');
+    const r = await (await fetch(`/api/run?scenario=${state.scenario}&enabled=${q}`)).json();
+    document.getElementById('result').hidden = false;
+    document.getElementById('chain').innerHTML = r.chain.map(c =>
+      `<span class="hop ${c.active ? (r.caughtBy === c.name ? 'catch' : 'on') : 'off'}">${c.name}</span>`
+    ).join('<span class="arrow">→</span>');
+    const out = document.getElementById('outcome');
+    out.className = 'outcome ' + (r.absorbed ? 'ok' : 'bad');
+    out.innerHTML = r.absorbed ? `<b>Contained.</b> ${r.outcome}` : `<b>Blast reaches users.</b> ${r.outcome}`;
+    document.getElementById('lh').textContent = 'meanwhile on localhost: ' + r.scenario.localhost;
+  }
+</script>
+</body>
+</html>

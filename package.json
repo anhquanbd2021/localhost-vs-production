@@ -1,0 +1,15 @@
+{
+  "name": "localhost-vs-production-demo",
+  "version": "1.0.0",
+  "description": "Companion demo: fire nine production-only failure scenarios at the thirteen layers — toggle a layer off and watch the blast radius.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node app/server.js",
+    "test": "node --test \"test/*.test.mjs\"",
+    "check": "npm test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
